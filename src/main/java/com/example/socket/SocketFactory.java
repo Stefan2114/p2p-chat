@@ -6,86 +6,59 @@ import com.example.core.NetworkFactory;
 import com.example.core.PeerConnection;
 import com.example.socket.serialization.MessageSerializer;
 
+import java.io.IOException;
 import java.net.Socket;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 public class SocketFactory implements NetworkFactory {
     private final MessageSerializer serializer;
-    private final ExecutorService executor;
+    private static final int HANDSHAKE_TIMEOUT_MS = 5000;
 
-    public SocketFactory(MessageSerializer serializer, ExecutorService executor) {
+    public SocketFactory(MessageSerializer serializer) {
         this.serializer = serializer;
-        this.executor = executor;
     }
 
     @Override
     public PeerConnection createOutgoingConnection(String ip, int port) {
-        SocketConnection conn = null;
+        Socket socket = null;
         try {
-            Socket socket = new Socket(ip, port);
-            conn = new SocketConnection(socket, serializer);
-            SocketConnection finalConn = conn;
+            socket = new Socket(ip, port);
+            socket.setSoTimeout(HANDSHAKE_TIMEOUT_MS);
 
-            Future<Boolean> handshake = executor.submit(() -> {
-                finalConn.sendMessage(new ChatMessage(MessageType.HANDSHAKE, "Hello"));
+            SocketConnection conn = new SocketConnection(socket, serializer);
 
-                ChatMessage response = finalConn.receiveMessage();
+            conn.sendMessage(new ChatMessage(MessageType.HANDSHAKE, "Hello"));
+            ChatMessage response = conn.receiveMessage();
 
-                return response != null && response.getType() == MessageType.ACK;
-            });
-
-            boolean success = handshake.get(5, TimeUnit.SECONDS);
-
-            if (success) {
+            if (response != null && response.getType() == MessageType.ACK) {
+                socket.setSoTimeout(0);
                 return conn;
             } else {
-                System.err.println("Handshake failed: Peer did not ACK.");
+                System.err.println("Handshake failed: Invalid response.");
             }
-
-        } catch (TimeoutException e) {
-            System.err.println("Handshake timed out (Peer unresponsive).");
-        } catch (Exception e) {
+            conn.close();
+        } catch (IOException e) {
             System.err.println("Connection failed: " + e.getMessage());
         }
 
-        if (conn != null) conn.close();
         return null;
     }
 
     public PeerConnection createIncomingConnection(Socket socket) {
-        SocketConnection conn = null;
         try {
-            conn = new SocketConnection(socket, serializer);
-            SocketConnection finalConn = conn;
+            socket.setSoTimeout(HANDSHAKE_TIMEOUT_MS);
+            SocketConnection conn = new SocketConnection(socket, serializer);
 
-            Future<Boolean> handshake = executor.submit(() -> {
-                ChatMessage msg = finalConn.receiveMessage();
-
-                if (msg != null && msg.getType() == MessageType.HANDSHAKE) {
-                    finalConn.sendMessage(new ChatMessage(MessageType.ACK, "Ack"));
-                    return true;
-                }
-                return false;
-            });
-
-            boolean success = handshake.get(5, TimeUnit.SECONDS);
-
-            if (success) {
+            ChatMessage msg = conn.receiveMessage();
+            if (msg != null && msg.getType() == MessageType.HANDSHAKE) {
+                conn.sendMessage(new ChatMessage(MessageType.ACK, "Ack"));
+                socket.setSoTimeout(0);
                 return conn;
-            } else {
-                System.err.println("Handshake failed: Expected Handshake.");
             }
-
-        } catch (TimeoutException e) {
-            System.err.println("Incoming handshake timed out.");
-        } catch (Exception e) {
-            System.err.println("Incoming connection setup failed: " + e.getMessage());
+            conn.close();
+        } catch (IOException e) {
+            System.err.println("Incoming handshake failed: " + e.getMessage());
         }
 
-        if (conn != null) conn.close();
         return null;
     }
 }

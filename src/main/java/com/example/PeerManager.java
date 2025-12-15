@@ -96,6 +96,5 @@ public class PeerManager {
 
     public void quitConnection() {
         peers.keySet().forEach(this::removeConnection);
-        executor.shutdownNow();
     }
 }
