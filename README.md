@@ -1,6 +1,6 @@
 # Java P2P Chat Application
 
-A lightweight, multithreaded Peer-to-Peer (P2P) chat application written in Java. It establishes direct TCP connections between clients using a strict handshake protocol and handles concurrency using Java 21 Virtual Threads.
+A lightweight, multithreaded Peer-to-Peer (P2P) chat application written in Java. It establishes direct TCP connections between clients using a strict handshake protocol and handles concurrency using Virtual Threads.
 
 ## 🤝 The Handshake Protocol
 

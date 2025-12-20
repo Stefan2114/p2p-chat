@@ -30,8 +30,11 @@
                 <artifactId>exec-maven-plugin</artifactId>
                 <version>3.1.0</version>
                 <configuration>
-                    <executable>java</executable>
-                    <commandlineArgs>-classpath %classpath com.example.Main ${exec.args}</commandlineArgs>
+                    <mainClass>com.example.Main</mainClass>
+
+                    <arguments>
+                        <argument>${exec.args}</argument>
+                    </arguments>
                 </configuration>
             </plugin>
         </plugins>

@@ -4,24 +4,20 @@ import com.example.core.ChatMessage;
 import com.example.core.MessageType;
 import com.example.core.NetworkFactory;
 import com.example.core.PeerConnection;
-
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
 
 public class PeerManager {
     private final ConcurrentHashMap<String, PeerConnection> peers = new ConcurrentHashMap<>();
     private final NetworkFactory factory;
-    private final ExecutorService executor;
+    private final ExecutionService executionService;
 
-
-
-    public PeerManager(NetworkFactory factory, ExecutorService executor) {
+    public PeerManager(NetworkFactory factory, ExecutionService executionService) {
         this.factory = factory;
-        this.executor = executor;
+        this.executionService = executionService;
     }
 
     public void createNewConnection(String ip, int port) {
-        executor.execute(() -> {
+        executionService.execute(() -> {
             String tempId = ip + ":" + port;
             if (peers.containsKey(tempId)) {
                 System.out.println("Connection already exists to " + tempId);
@@ -29,37 +25,20 @@ public class PeerManager {
             }
 
             PeerConnection conn = factory.createOutgoingConnection(ip, port);
-
             if (conn != null) {
                 registerConnection(conn);
             }
         });
     }
 
-    public void joinNetwork(PeerConnection connection) {
-        String peerId = connection.getId();
-        PeerConnection existing = peers.putIfAbsent(peerId, connection);
-
-        if (existing != null) {
-            System.out.println("Duplicate connection: " + peerId);
-            connection.close();
-        } else {
-            System.out.println("Connected: " + peerId);
-            executor.execute(new PeerMessageListener(connection, this));
-        }
-    }
-
-    private void registerConnection(PeerConnection conn) {
+    public void registerConnection(PeerConnection conn) {
         String peerId = conn.getId();
-
-        PeerConnection existing = peers.putIfAbsent(peerId, conn);
-
-        if (existing != null) {
+        if (peers.putIfAbsent(peerId, conn) != null) {
             System.out.println("Duplicate connection detected for " + peerId);
             conn.close();
         } else {
-            System.out.println("Connected: " + peerId);
-            executor.execute(new PeerMessageListener(conn, this));
+            System.out.println(">> Connected to: " + peerId);
+            executionService.execute(new PeerMessageListener(conn, this));
         }
     }
 
@@ -70,7 +49,7 @@ public class PeerManager {
             return;
         }
 
-        executor.execute(() -> {
+        executionService.execute(() -> {
             try {
                 conn.sendMessage(new ChatMessage(content));
                 System.out.println("Sent to " + peerId);
@@ -83,6 +62,7 @@ public class PeerManager {
 
     public void removeConnection(String peerId) {
         PeerConnection conn = peers.remove(peerId);
+
         if (conn != null) {
             try {
                 if (!conn.isClosed()) {
